@@ -5,6 +5,10 @@
       "args": [
         "../../mcp/index.js"
       ],
+      "env": {
+        "GH_TOKEN": "${GH_TOKEN}",
+        "COPILOT_ENTERPRISE": "${COPILOT_ENTERPRISE:-github}"
+      },
       "tools": [
         "*"
       ]
