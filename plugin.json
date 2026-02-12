@@ -1,20 +1,10 @@
 {
   "name": "copilot-metrics",
   "version": "1.0.0",
-  "description": "Query GitHub Copilot usage metrics for your enterprise — active users, feature adoption, language/model/IDE breakdowns, code generation stats, and more.",
+  "description": "Query GitHub Copilot usage metrics for your enterprise.",
   "author": "toddmanion",
+  "source": "plugins/copilot-metrics",
   "skills": [
-    {
-      "name": "copilot-metrics",
-      "description": "Query Copilot usage metrics",
-      "path": "plugins/copilot-metrics/skills/copilot-metrics/SKILL.md"
-    }
-  ],
-  "mcpServers": [
-    {
-      "name": "copilot-metrics",
-      "description": "MCP server for Copilot metrics API",
-      "path": "plugins/copilot-metrics/.mcp.json"
-    }
+    "./skills/copilot-metrics"
   ]
 }
