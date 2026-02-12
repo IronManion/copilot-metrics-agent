@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copilot Metrics Agent</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-hover: #1c2129;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-purple: #d2a8ff;
+  --user-bubble: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --radius: 12px;
+  --sidebar-w: 280px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* App layout */
+#app { display: flex; width: 100%; height: 100%; }
+
+/* Sidebar */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  z-index: 100;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 12px 0 0;
+}
+
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #58a6ff, #d2a8ff);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+#new-chat {
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s, border-color 0.2s;
+}
+#new-chat:hover { background: var(--surface-hover); border-color: var(--text-muted); }
+
+.sidebar-sections {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.sidebar-section h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 12px 16px 6px;
+  font-weight: 600;
+}
+
+.report-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s;
+  border-radius: 8px;
+  margin: 1px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.report-item:hover { background: var(--surface-hover); color: var(--text); }
+.report-item.active { background: rgba(88,166,255,0.1); color: var(--accent); }
+
+.report-item .icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.report-item .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-empty {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.save-report-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 7px 14px;
+  background: rgba(88,166,255,0.1);
+  border: 1px solid rgba(88,166,255,0.3);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.save-report-btn:hover {
+  background: rgba(88,166,255,0.2);
+  border-color: var(--accent);
+}
+.save-report-btn.saved {
+  background: rgba(63,185,80,0.1);
+  border-color: rgba(63,185,80,0.3);
+  color: #3fb950;
+  cursor: default;
+}
+
+/* Mobile sidebar toggle */
+#sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+}
+
+/* Main area */
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  position: relative;
+}
+
+/* Messages container */
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 16px 0;
+  display: none;
+  flex-direction: column;
+}
+
+.messages-inner {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+/* Message bubbles */
+.message {
+  display: flex;
+  gap: 12px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message.user { justify-content: flex-end; }
+.message.agent { justify-content: flex-start; }
+
+.message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.message.agent .message-avatar {
+  background: linear-gradient(135deg, #58a6ff, #d2a8ff);
+}
+
+.message.user .message-avatar {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  order: 2;
+}
+
+.message-content {
+  max-width: 95%;
+  min-width: 0;
+}
+
+.message.user .message-content {
+  background: var(--user-bubble);
+  padding: 12px 16px;
+  border-radius: 18px 18px 4px 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.message.agent .message-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 16px 20px;
+  border-radius: 4px 18px 18px 18px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* Markdown styles inside agent messages */
+.message.agent .message-content h1 { font-size: 1.4em; margin: 16px 0 8px; font-weight: 700; }
+.message.agent .message-content h2 { font-size: 1.2em; margin: 14px 0 6px; font-weight: 600; }
+.message.agent .message-content h3 { font-size: 1.05em; margin: 12px 0 4px; font-weight: 600; }
+.message.agent .message-content p { margin: 8px 0; }
+.message.agent .message-content ul, .message.agent .message-content ol { margin: 8px 0; padding-left: 24px; }
+.message.agent .message-content li { margin: 4px 0; }
+.message.agent .message-content strong { color: var(--text); font-weight: 600; }
+
+.message.agent .message-content code {
+  background: rgba(110,118,129,0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.message.agent .message-content pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+}
+
+.message.agent .message-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.message.agent .message-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.message.agent .message-content thead th {
+  background: rgba(110,118,129,0.15);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.message.agent .message-content tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.message.agent .message-content tbody tr:nth-child(even) {
+  background: rgba(110,118,129,0.06);
+}
+
+.message.agent .message-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 14px;
+  margin: 10px 0;
+  color: var(--text-muted);
+}
+
+.message.agent .message-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.message.agent .message-content a:hover { text-decoration: underline; }
+
+.message.agent .message-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* Chart wrapper */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+@media (max-width: 900px) {
+  .charts-grid { grid-template-columns: 1fr; }
+}
+
+.chart-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.chart-card canvas {
+  max-height: 300px;
+  width: 100% !important;
+}
+
+.chart-wrapper {
+  margin-top: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  max-height: 400px;
+  position: relative;
+}
+
+.chart-wrapper canvas {
+  max-height: 360px;
+  width: 100% !important;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 24px 0 4px;
+  padding-bottom: 4px;
+}
+
+.chart-title:first-of-type {
+  margin-top: 16px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 560px;
+  max-width: 90vw;
+  padding: 28px;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+  animation: modalSlide 0.25s ease;
+}
+
+@keyframes modalSlide {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.modal p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+
+.modal-input {
+  width: 100%;
+  min-height: 100px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  padding: 14px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+}
+
+.modal-input::placeholder { color: var(--text-muted); }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.modal-btn {
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: all 0.15s;
+}
+
+.modal-btn-cancel {
+  background: transparent;
+  color: var(--text-muted);
+}
+.modal-btn-cancel:hover { background: var(--surface-hover); color: var(--text); }
+
+.modal-btn-create {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  border: none;
+}
+.modal-btn-create:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(88,166,255,0.3); }
+.modal-btn-create:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Create Report button in sidebar */
+#create-report-btn {
+  width: calc(100% - 16px);
+  margin: 4px 8px 8px;
+  padding: 8px 12px;
+  background: rgba(88,166,255,0.08);
+  border: 1px dashed rgba(88,166,255,0.3);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+#create-report-btn:hover {
+  background: rgba(88,166,255,0.15);
+  border-color: var(--accent);
+}
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex;
+  gap: 5px;
+  padding: 4px 0;
+  align-items: center;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator span:nth-child(1) { animation-delay: 0s; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.16s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.32s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+/* Welcome screen */
+#welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.welcome-icon {
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, #58a6ff, #d2a8ff, #f78166);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(88,166,255,0.2);
+  animation: glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from { box-shadow: 0 8px 32px rgba(88,166,255,0.15); }
+  to { box-shadow: 0 8px 48px rgba(88,166,255,0.3); }
+}
+
+.welcome-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--text), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-subtitle {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin-bottom: 36px;
+  max-width: 420px;
+}
+
+.prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  max-width: 600px;
+}
+
+.prompt-chip {
+  padding: 10px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font);
+}
+.prompt-chip:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+/* Input area */
+#input-area {
+  padding: 16px 24px 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.input-wrapper {
+  max-width: 800px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 4px 4px 4px 20px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(88,166,255,0.15), 0 0 20px rgba(88,166,255,0.08);
+}
+
+#prompt-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 15px;
+  font-family: var(--font);
+  padding: 10px 0;
+  min-width: 0;
+}
+
+#prompt-input::placeholder { color: var(--text-muted); }
+
+#send-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s, opacity 0.15s;
+}
+#send-btn:hover { transform: scale(1.08); }
+#send-btn:active { transform: scale(0.95); }
+#send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+  }
+  #sidebar.open { transform: translateX(0); }
+  #sidebar-toggle { display: flex; }
+  #sidebar-overlay.open { display: block; }
+  #main { width: 100%; }
+  .welcome-title { font-size: 22px; }
+  .message-content { max-width: 92% !important; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <button id="sidebar-toggle">☰</button>
+  <div id="sidebar-overlay"></div>
+
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <button id="new-chat">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a.75.75 0 0 1 .75.75v5.5h5.5a.75.75 0 0 1 0 1.5h-5.5v5.5a.75.75 0 0 1-1.5 0v-5.5h-5.5a.75.75 0 0 1 0-1.5h5.5v-5.5A.75.75 0 0 1 8 1z"/></svg>
+        New Chat
+      </button>
+      <div class="logo">
+        <div class="logo-icon">✨</div>
+        Copilot Metrics Agent
+      </div>
+    </div>
+    <div class="sidebar-sections">
+      <div class="sidebar-section">
+        <h3>Standard Reports</h3>
+        <div id="standard-reports"></div>
+      </div>
+      <div class="sidebar-section">
+        <h3>Custom Reports</h3>
+        <button id="create-report-btn">✨ Create Report...</button>
+        <div id="custom-reports"><div class="sidebar-empty">No custom reports yet</div></div>
+      </div>
+      <div class="sidebar-section">
+        <h3>Chat History</h3>
+        <div id="chat-history"></div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="messages">
+      <div class="messages-inner" id="messages-inner"></div>
+    </div>
+
+    <div id="welcome">
+      <div class="welcome-icon">✨</div>
+      <div class="welcome-title">Copilot Metrics Agent</div>
+      <div class="welcome-subtitle">Ask me anything about your GitHub Copilot usage data — trends, top users, language breakdowns, and more.</div>
+      <div class="prompt-chips">
+        <button class="prompt-chip" data-prompt="Show usage trends over time">📈 Show usage trends</button>
+        <button class="prompt-chip" data-prompt="Top 10 most active Copilot users">🏆 Top 10 most active users</button>
+        <button class="prompt-chip" data-prompt="Compare agent mode vs chat usage">⚡ Compare agent mode vs chat</button>
+        <button class="prompt-chip" data-prompt="Generate a report on language adoption trends">📄 Generate a language report</button>
+      </div>
+    </div>
+
+    <div id="input-area">
+      <div class="input-wrapper">
+        <input type="text" id="prompt-input" placeholder="Ask about your Copilot usage data..." autocomplete="off" />
+        <button id="send-btn" title="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <div id="create-report-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2>✨ Create Custom Report</h2>
+      <p>Describe the report you'd like to generate. The agent will analyze the data and build a report with charts.</p>
+      <textarea class="modal-input" id="modal-prompt" placeholder="e.g. Show me a weekly breakdown of agent mode adoption by team, with a comparison of LOC generated across the top 10 languages..."></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-cancel" id="modal-cancel">Cancel</button>
+        <button class="modal-btn modal-btn-create" id="modal-create">Generate Report</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const CHART_COLORS = [
+    '#58a6ff','#f78166','#3fb950','#d2a8ff','#f0883e',
+    '#79c0ff','#56d364','#bc8cff','#ffa657','#a5d6ff'
+  ];
+
+  const REPORT_ICONS = ['📊','📈','👥','💻','🔄','⚙️','🧮','📋','🏷️','🔍'];
+
+  // DOM references
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebarOverlay = document.getElementById('sidebar-overlay');
+  const standardReportsEl = document.getElementById('standard-reports');
+  const customReportsEl = document.getElementById('custom-reports');
+  const chatHistoryEl = document.getElementById('chat-history');
+  const messagesContainer = document.getElementById('messages');
+  const messagesInner = document.getElementById('messages-inner');
+  const welcomeEl = document.getElementById('welcome');
+  const promptInput = document.getElementById('prompt-input');
+  const sendBtn = document.getElementById('send-btn');
+  const newChatBtn = document.getElementById('new-chat');
+
+  let activeReportId = null;
+  let activeChatId = null;
+  let customReports = [];
+  let chatSessions = [];
+  let currentChat = null;
+  let chartInstances = [];
+  let isLoading = false;
+
+  // Configure marked
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({ breaks: true, gfm: true });
+  }
+
+  // --- Sidebar mobile toggle ---
+  sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    sidebarOverlay.classList.toggle('open');
+  });
+  sidebarOverlay.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    sidebarOverlay.classList.remove('open');
+  });
+
+  // --- Fetch & render standard reports ---
+  async function loadReports() {
+    try {
+      const res = await fetch('/api/reports');
+      if (!res.ok) return;
+      const reports = await res.json();
+      standardReportsEl.innerHTML = '';
+      reports.forEach((r, i) => {
+        const el = createReportItem(r.id || r.name, r.title || r.name, r.icon || REPORT_ICONS[i % REPORT_ICONS.length], 'standard');
+        standardReportsEl.appendChild(el);
+      });
+    } catch (e) {
+      console.warn('Could not load reports:', e);
+    }
+  }
+
+  function createReportItem(id, title, icon, type) {
+    const el = document.createElement('div');
+    el.className = 'report-item';
+    el.dataset.id = id;
+    el.dataset.type = type;
+    el.innerHTML = `<span class="icon">${icon}</span><span class="title">${escapeHtml(title)}</span>`;
+    el.addEventListener('click', () => {
+      if (type === 'standard') openStandardReport(id, title);
+      else openCustomReport(id);
+    });
+    return el;
+  }
+
+  function setActiveReport(id) {
+    activeReportId = id;
+    activeChatId = null;
+    document.querySelectorAll('.report-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.id === String(id));
+    });
+  }
+
+  function setActiveChat(id) {
+    activeChatId = id;
+    activeReportId = null;
+    document.querySelectorAll('.report-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.id === String(id));
+    });
+  }
+
+  // --- Standard report ---
+  async function openStandardReport(id, title) {
+    showChatView();
+    clearMessages();
+    setActiveReport(id);
+    addTypingIndicator();
+
+    try {
+      const res = await fetch(`/api/reports/${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error('Failed to fetch report');
+      const data = await res.json();
+      removeTypingIndicator();
+      const markdown = data.markdown || data.content || data.text || JSON.stringify(data, null, 2);
+      addAgentMessage(markdown, data.chartData || null, false, null, data.chartsData || null);
+    } catch (e) {
+      removeTypingIndicator();
+      addAgentMessage('Sorry, I couldn\'t load that report. Please try again.');
+    }
+  }
+
+  // --- Custom report ---
+  function openCustomReport(id) {
+    const report = customReports.find(r => r.id === id);
+    if (!report) return;
+    showChatView();
+    clearMessages();
+    setActiveReport(id);
+    addAgentMessage(report.response, report.chartData || null, false, null, report.chartsData || null);
+  }
+
+  // --- Chat history ---
+  function openChatSession(id) {
+    const session = chatSessions.find(s => s.id === id);
+    if (!session) return;
+    showChatView();
+    clearMessages();
+    setActiveChat(id);
+    currentChat = session;
+    session.messages.forEach(m => {
+      if (m.role === 'user') addUserMessage(m.text);
+      else addAgentMessage(m.text, m.chartData || null, false, null, m.chartsData || null);
+    });
+  }
+
+  function createChatItem(id, title) {
+    const el = document.createElement('div');
+    el.className = 'report-item';
+    el.dataset.id = id;
+    el.dataset.type = 'chat';
+    el.innerHTML = `<span class="icon">💬</span><span class="title">${escapeHtml(title)}</span>`;
+    el.addEventListener('click', () => openChatSession(id));
+    return el;
+  }
+
+  // --- Submit prompt ---
+  async function submitPrompt(text) {
+    if (!text.trim() || isLoading) return;
+    isLoading = true;
+    sendBtn.disabled = true;
+
+    showChatView();
+
+    // Create or continue a chat session
+    if (!currentChat || activeReportId) {
+      const id = 'chat-' + Date.now();
+      const title = text.substring(0, 35) + (text.length > 35 ? '…' : '');
+      currentChat = { id, title, messages: [] };
+      chatSessions.unshift(currentChat);
+      const el = createChatItem(id, title);
+      chatHistoryEl.prepend(el);
+      clearMessages();
+      setActiveChat(id);
+    }
+
+    currentChat.messages.push({ role: 'user', text });
+    addUserMessage(text);
+    addTypingIndicator();
+    scrollToBottom();
+
+    try {
+      const res = await fetch('/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+      });
+      if (!res.ok) throw new Error('Query failed');
+      const data = await res.json();
+      removeTypingIndicator();
+      const markdown = data.markdown || data.content || data.text || data.response || JSON.stringify(data, null, 2);
+      const chartData = data.chartData || data.chart_data || null;
+
+      // Detect if this is a report-creation request
+      const isReportRequest = /\b(generate|create|build|make)\s+(a\s+)?(report|dashboard)\b/i.test(text);
+      currentChat.messages.push({ role: 'agent', text: markdown, chartData, isReport: isReportRequest });
+      addAgentMessage(markdown, chartData, isReportRequest, text);
+    } catch (e) {
+      removeTypingIndicator();
+      addAgentMessage('Sorry, something went wrong processing your request. Please try again.');
+      currentChat.messages.push({ role: 'agent', text: 'Error processing request.' });
+    }
+
+    isLoading = false;
+    sendBtn.disabled = false;
+    scrollToBottom();
+  }
+
+  // --- Messages ---
+  function addUserMessage(text) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message user';
+    wrapper.innerHTML = `
+      <div class="message-content">${escapeHtml(text)}</div>
+      <div class="message-avatar">👤</div>
+    `;
+    messagesInner.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function addAgentMessage(markdown, chartData, isReportCandidate, promptText, chartsData) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message agent';
+
+    let html = '';
+    try {
+      html = typeof marked !== 'undefined' ? marked.parse(markdown) : markdown;
+    } catch (e) {
+      html = markdown;
+    }
+
+    wrapper.innerHTML = `
+      <div class="message-avatar">✨</div>
+      <div class="message-content">${html}</div>
+    `;
+
+    const contentEl = wrapper.querySelector('.message-content');
+
+    // Add "Save as Report" button for report-worthy responses
+    if (isReportCandidate || (markdown && markdown.length > 200 && !chartsData)) {
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'save-report-btn';
+      saveBtn.innerHTML = '📄 Save as Report';
+      saveBtn.addEventListener('click', () => {
+        if (saveBtn.classList.contains('saved')) return;
+        const id = 'custom-' + Date.now();
+        const title = promptText
+          ? promptText.replace(/^(generate|create|build|make)\s+(a\s+)?(report|dashboard)\s*(on|about|for)?\s*/i, '').substring(0, 40)
+          : 'Custom Report';
+        const finalTitle = title.charAt(0).toUpperCase() + title.slice(1);
+        const report = { id, response: markdown, chartData, title: finalTitle };
+        customReports.push(report);
+        const emptyMsg = customReportsEl.querySelector('.sidebar-empty');
+        if (emptyMsg) emptyMsg.remove();
+        const el = createReportItem(id, finalTitle, '📄', 'custom');
+        customReportsEl.appendChild(el);
+        saveBtn.innerHTML = '✅ Saved to Reports';
+        saveBtn.classList.add('saved');
+      });
+      contentEl.appendChild(saveBtn);
+    }
+
+    messagesInner.appendChild(wrapper);
+
+    // Render multiple charts (chartsData) in a 2-column grid, or single chart (chartData)
+    if (chartsData && Array.isArray(chartsData) && chartsData.length > 0) {
+      const grid = document.createElement('div');
+      grid.className = 'charts-grid';
+      for (const cd of chartsData) {
+        const card = document.createElement('div');
+        card.className = 'chart-card';
+        if (cd.title) {
+          const titleEl = document.createElement('div');
+          titleEl.className = 'chart-card-title';
+          titleEl.textContent = cd.title;
+          card.appendChild(titleEl);
+        }
+        const canvas = document.createElement('canvas');
+        card.appendChild(canvas);
+        grid.appendChild(card);
+        const config = buildChartConfig(cd);
+        try {
+          const instance = new Chart(canvas, config);
+          chartInstances.push(instance);
+        } catch (e) { console.warn('Chart render error:', e); }
+      }
+      contentEl.appendChild(grid);
+    } else if (chartData) {
+      renderChart(contentEl, chartData);
+    }
+
+    scrollToBottom();
+  }
+
+  function addTypingIndicator() {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'message agent';
+    wrapper.id = 'typing-msg';
+    wrapper.innerHTML = `
+      <div class="message-avatar">✨</div>
+      <div class="message-content">
+        <div class="typing-indicator">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    `;
+    messagesInner.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  function removeTypingIndicator() {
+    const el = document.getElementById('typing-msg');
+    if (el) el.remove();
+  }
+
+  function clearMessages() {
+    messagesInner.innerHTML = '';
+    destroyCharts();
+  }
+
+  // --- Chart rendering ---
+  function renderChart(container, chartData) {
+    const chartWrap = document.createElement('div');
+    chartWrap.className = 'chart-wrapper';
+    const canvas = document.createElement('canvas');
+    chartWrap.appendChild(canvas);
+    container.appendChild(chartWrap);
+
+    const config = buildChartConfig(chartData);
+    try {
+      const instance = new Chart(canvas, config);
+      chartInstances.push(instance);
+    } catch (e) {
+      console.warn('Chart render error:', e);
+    }
+  }
+
+  function buildChartConfig(chartData) {
+    const type = chartData.type || 'bar';
+    const isStacked = chartData.stacked === true;
+    const datasets = (chartData.datasets || []).map((ds, i) => ({
+      ...ds,
+      backgroundColor: ds.backgroundColor || (type === 'line' ? 'transparent' : CHART_COLORS[i % CHART_COLORS.length]),
+      borderColor: ds.borderColor || CHART_COLORS[i % CHART_COLORS.length],
+      borderWidth: ds.borderWidth !== undefined ? ds.borderWidth : (type === 'line' ? 2 : 1),
+      pointBackgroundColor: ds.pointBackgroundColor || CHART_COLORS[i % CHART_COLORS.length],
+      fill: ds.fill !== undefined ? ds.fill : false,
+      tension: ds.tension !== undefined ? ds.tension : 0.3
+    }));
+
+    // For pie/doughnut: apply multi-color backgrounds to first dataset
+    if ((type === 'pie' || type === 'doughnut') && datasets.length > 0 && !Array.isArray(datasets[0].backgroundColor)) {
+      const len = (datasets[0].data || []).length;
+      datasets[0].backgroundColor = CHART_COLORS.concat(CHART_COLORS).slice(0, len);
+      datasets[0].borderColor = 'rgba(22,27,34,0.8)';
+      datasets[0].borderWidth = 2;
+    }
+
+    return {
+      type,
+      data: { labels: chartData.labels || [], datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            labels: { color: '#e6edf3', font: { size: 12 } }
+          },
+          tooltip: {
+            backgroundColor: '#161b22',
+            titleColor: '#e6edf3',
+            bodyColor: '#8b949e',
+            borderColor: '#30363d',
+            borderWidth: 1
+          }
+        },
+        scales: (type === 'pie' || type === 'doughnut') ? {} : {
+          x: {
+            stacked: isStacked,
+            ticks: { color: '#8b949e', font: { size: 11 }, maxRotation: 45 },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            border: { color: '#30363d' }
+          },
+          y: {
+            stacked: isStacked,
+            ticks: { color: '#8b949e', font: { size: 11 } },
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            border: { color: '#30363d' },
+            beginAtZero: true
+          }
+        }
+      }
+    };
+  }
+
+  function destroyCharts() {
+    chartInstances.forEach(c => { try { c.destroy(); } catch(e){} });
+    chartInstances = [];
+  }
+
+  // --- View management ---
+  function showChatView() {
+    welcomeEl.style.display = 'none';
+    messagesContainer.style.display = 'flex';
+  }
+
+  function showWelcome() {
+    welcomeEl.style.display = 'flex';
+    messagesContainer.style.display = 'none';
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+  }
+
+  // --- New chat ---
+  newChatBtn.addEventListener('click', () => {
+    clearMessages();
+    showWelcome();
+    setActiveReport(null);
+    currentChat = null;
+    activeChatId = null;
+    document.querySelectorAll('.report-item').forEach(el => el.classList.remove('active'));
+    promptInput.value = '';
+    sidebar.classList.remove('open');
+    sidebarOverlay.classList.remove('open');
+  });
+
+  // --- Input handling ---
+  sendBtn.addEventListener('click', () => {
+    const text = promptInput.value.trim();
+    if (text) {
+      promptInput.value = '';
+      submitPrompt(text);
+    }
+  });
+
+  promptInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  // --- Prompt chips ---
+  document.querySelectorAll('.prompt-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const prompt = chip.dataset.prompt;
+      if (prompt) submitPrompt(prompt);
+    });
+  });
+
+  // --- Utility ---
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // --- Create Report Modal ---
+  const createReportBtn = document.getElementById('create-report-btn');
+  const modalOverlay = document.getElementById('create-report-modal');
+  const modalPrompt = document.getElementById('modal-prompt');
+  const modalCancel = document.getElementById('modal-cancel');
+  const modalCreate = document.getElementById('modal-create');
+
+  createReportBtn.addEventListener('click', () => {
+    modalOverlay.style.display = 'flex';
+    modalPrompt.value = '';
+    modalCreate.disabled = false;
+    modalCreate.textContent = 'Generate Report';
+    setTimeout(() => modalPrompt.focus(), 100);
+  });
+
+  modalCancel.addEventListener('click', () => {
+    modalOverlay.style.display = 'none';
+  });
+
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) modalOverlay.style.display = 'none';
+  });
+
+  modalCreate.addEventListener('click', async () => {
+    const text = modalPrompt.value.trim();
+    if (!text) return;
+    modalCreate.disabled = true;
+    modalCreate.textContent = 'Generating...';
+
+    try {
+      const res = await fetch('/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+      });
+      if (!res.ok) throw new Error('Query failed');
+      const data = await res.json();
+      const markdown = data.markdown || data.content || '';
+      const chartData = data.chartData || null;
+      const chartsData = data.chartsData || null;
+
+      // Save to custom reports
+      const id = 'custom-' + Date.now();
+      const title = text.substring(0, 45) + (text.length > 45 ? '…' : '');
+      const report = { id, response: markdown, chartData, chartsData, title };
+      customReports.push(report);
+      const emptyMsg = customReportsEl.querySelector('.sidebar-empty');
+      if (emptyMsg) emptyMsg.remove();
+      const el = createReportItem(id, title, '📄', 'custom');
+      customReportsEl.appendChild(el);
+
+      // Close modal and open the report
+      modalOverlay.style.display = 'none';
+      openCustomReport(id);
+    } catch (e) {
+      modalCreate.textContent = 'Error — Try Again';
+      modalCreate.disabled = false;
+    }
+  });
+
+  modalPrompt.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      modalCreate.click();
+    }
+  });
+
+  // --- Init ---
+  loadReports();
+  showWelcome();
+  promptInput.focus();
+})();
+</script>
+</body>
+</html>

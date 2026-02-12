@@ -1,0 +1,21 @@
+{
+  "name": "copilot-metrics",
+  "version": "1.0.0",
+  "description": "GitHub Copilot Metrics MCP Server - Query Copilot usage data from the GitHub API directly in Copilot CLI",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "copilot-metrics": "bin.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "mcp": "node index.js"
+  },
+  "keywords": ["github", "copilot", "metrics", "mcp", "copilot-plugin"],
+  "author": "toddmanion",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.0"
+  }
+}

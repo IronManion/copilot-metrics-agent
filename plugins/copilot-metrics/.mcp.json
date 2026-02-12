@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "copilot-metrics": {
+      "command": "node",
+      "args": [
+        "../../mcp/index.js"
+      ],
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}
